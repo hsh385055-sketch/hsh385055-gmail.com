@@ -180,45 +180,17 @@ body.cute #deleteSongCancel,body.cute #artCancel{background:#ecdaf4;color:#51406
     return null;
   }
   async function audioOnlyBlob(file) {
-    if (!/\.(mp4|m4v|mov)$/i.test(file.name) && !/^(video\/mp4|video\/quicktime)$/i.test(file.type || '')) {
-      return {blob:file, mode:'오디오 파일'};
-    }
-    try {
-      const moov = await locateMoov(file);
-      if (!moov || moov.size > 32 * 1024 * 1024) throw new Error('MP4 메타데이터를 읽지 못함');
-      const metadata = await file.slice(moov.pos, moov.pos+moov.size).arrayBuffer();
-      const v = new DataView(metadata);
-      const root=getBox(v,0,metadata.byteLength);
-      const top=childBoxes(v,root.header,root.size);
-      let videos=[], audios=0;
-      for (const trak of top.filter(b=>b.type==='trak')) {
-        const mdia=childBoxes(v,trak.pos+trak.header,trak.pos+trak.size).find(b=>b.type==='mdia');
-        if (!mdia) continue;
-        const hdlr=childBoxes(v,mdia.pos+mdia.header,mdia.pos+mdia.size).find(b=>b.type==='hdlr');
-        if (!hdlr || hdlr.pos + hdlr.header + 12 > metadata.byteLength) continue;
-        const handler=String.fromCharCode(...new Uint8Array(metadata,hdlr.pos + hdlr.header + 8,4));
-        if (handler==='vide') videos.push(moov.pos + trak.pos + 4);
-        if (handler==='soun') audios++;
-      }
-      if (!audios) throw new Error('오디오 트랙이 없는 영상');
-      if (!videos.length) return {blob:new Blob([file],{type:'audio/mp4'}),mode:'이미 오디오 전용'};
-      // Transform only four bytes per video-track box: trak -> free.
-      // Box sizes, media-data offsets and AAC samples stay unchanged.
-      // The media decoder therefore sees an audio-only MP4, not a video.
-      const chunks=[]; let last=0;
-      for (const p of videos.sort((a,b)=>a-b)) {
-        chunks.push(file.slice(last,p),new Uint8Array([102,114,101,101]));
-        last=p+4;
-      }
-      chunks.push(file.slice(last));
-      return {blob:new Blob(chunks,{type:'audio/mp4'}), mode:'영상 트랙 제외됨'};
-    } catch (err) {
-      if (/오디오 트랙이 없는/.test(err.message)) throw err;
-      // Fallback still uses an <audio> element, never a hidden <video>.
-      return {blob:new Blob([file],{type:'audio/mp4'}),mode:'오디오 재생 (변환 생략)'};
-    }
+    // Keep the original MP4 bytes intact. Rewriting trak atoms to free can
+    // make otherwise supported AAC/MP4 files fail to decode on iPadOS Safari.
+    // The original File is retained in IndexedDB, so existing imports repair
+    // themselves on reload, without deleting or importing songs again.
+    const videoContainer=/\.(mp4|m4v|mov)$/i.test(file.name||'') ||
+      /^(video\/mp4|video\/quicktime)$/i.test(file.type||'');
+    if(!videoContainer)return {blob:file,mode:'원본 오디오'};
+    if(file.type)return {blob:file,mode:'원본 MP4 유지'};
+    const mime=/\.mov$/i.test(file.name||'')?'video/quicktime':'video/mp4';
+    return {blob:new Blob([file],{type:mime}),mode:'원본 MP4 유지'};
   }
-
 
 
 
@@ -1105,7 +1077,20 @@ document.addEventListener('visibilitychange',()=>{
  if(audio.ended&&expectedPlaying)completeTrack('visibility');
  else if(expectedPlaying&&audio.paused)requestTrackPlayback(transitionToken);
 });
-audio.onerror=()=>{clearEndWatchdog();clearPlaybackRetry();if(current>=0)note('재생할 수 없는 오디오 형식입니다. 이 곡의 파일을 확인하세요.');};
+audio.onerror=()=>{
+ clearEndWatchdog();clearPlaybackRetry();
+ if(current<0)return;
+ const f=songs[current]?.file;
+ const code=audio.error?.code;
+ if(code===3||code===4){
+  const isMp4=/\.(mp4|m4v|mov)$/i.test(f?.name||'');
+  note(isMp4
+   ?'이 MP4의 음성 형식을 iPad Safari가 해독하지 못했습니다. 파일의 오디오 코덱을 확인하거나 AAC(M4A)·MP3 파일로 추가해 주세요.'
+   :'이 음원의 형식이나 코덱을 iPad Safari가 재생하지 못했습니다. AAC(M4A)·MP3 형식을 사용해 주세요.');
+ }else{
+  note('음악을 읽는 중 오류가 발생했습니다. 다른 곡을 선택했다가 다시 재생해 보세요.');
+ }
+};
 
 $('trimToggle').onclick=()=>$('trim').classList.toggle('hide');
 $('saveTrim').onclick=async()=>{
