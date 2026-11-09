@@ -1,0 +1,20 @@
+{
+  "name": "Quiet Player (iPad)",
+  "short_name": "Quiet Player",
+  "description": "자막 없는 Quiet Player. 음악은 아이패드 브라우저 저장소에 보관됩니다.",
+  "lang": "ko",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#101116",
+  "theme_color": "#101116",
+  "icons": [
+    {
+      "src": "./icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
