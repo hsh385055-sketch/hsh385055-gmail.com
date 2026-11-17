@@ -79,8 +79,11 @@ function renderToday(){
  return `<div class="studyslot ${done?'done':''}"><input class="tick" type="checkbox" data-id="${E(b.block_id)}" aria-label="${E(b.subject)} 완료" ${done?'checked':''}><div><label>${E(b.subject)} ${opt?'<span class="tag">선택</span>':''}</label><small>${E(b.topic||b.context||'반복 복습')}</small><small>${E(b.method||'개념 → 문제 → 회상')}</small><div class="blockFoot"><span>${E(b.context||'공부')}</span><select data-confidence="${E(b.block_id)}" aria-label="이해도 기록"><option value="">이해도 기록</option>${[1,2,3,4,5].map(n=>`<option value="${n}" ${Number(state.confidence[b.block_id])===n?'selected':''}>이해도 ${n}/5</option>`).join('')}</select></div></div><div class="time">${timeLabel(b)}</div></div>`}).join(''):'<p class="empty">시험 당일은 예정된 공부 블록이 없어. 그동안의 준비를 믿고 시험에 집중하자.</p>';
  $('studyList').querySelectorAll('.tick').forEach(el=>el.addEventListener('change',()=>{if(el.checked)state.checks[el.dataset.id]={time:Date.now()};else delete state.checks[el.dataset.id];save();renderAll()}));
  $('studyList').querySelectorAll('select').forEach(el=>el.addEventListener('change',()=>{if(el.value)state.confidence[el.dataset.confidence]=Number(el.value);else delete state.confidence[el.dataset.confidence];save()}));
- const fb=cfg.fallbacks[selected];$('fallback').hidden=!fb;
- if(fb)$('fallback').textContent='🔎 밀린 공부 대안 · '+fb.condition+' → '+fb.action;
+ const fallbackPrereqs={'2026-11-23':['2026-11-20:2'],'2026-11-24':['2026-11-21:0'],'2026-11-25':['2026-11-19:2','2026-11-22:0'],'2026-12-01':['2026-11-28:0']};
+ const fb=cfg.fallbacks[selected],prereqs=fallbackPrereqs[selected]||[];
+ const needsFallback=!!fb&&prereqs.length>0&&prereqs.every(id=>!state.checks[id]);
+ $('fallback').hidden=!needsFallback;
+ if(needsFallback)$('fallback').textContent='🔎 밀린 공부 대안 · '+fb.condition+' → '+fb.action;
  $('routineList').innerHTML=routineFor(selected).map(x=>`<div class="routine"><b>${E(x[0])}</b><span>${E(x[1])}</span></div>`).join('');
  $('dayNote').value=state.notes[selected]||'';
 }
